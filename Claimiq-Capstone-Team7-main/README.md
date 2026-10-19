@@ -1,0 +1,1 @@
+# Claimiq-Capstone-Team7
