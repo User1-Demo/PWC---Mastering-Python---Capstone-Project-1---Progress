@@ -1,0 +1,223 @@
+Every table uses a UUID primary key (id) except audit_logs, which uses a bigserial. created_at and updated_at are timestamps on the mutable tables.
+
+regions
+
+Field	Type / notes
+code	varchar, unique
+name	varchar
+is_active	bool
+
+users
+
+Field	Type / notes
+email	unique, indexed
+full_name	varchar
+hashed_password	bcrypt hash
+role	enum: admin, claims_manager, claims_adjuster, support_agent
+region_id	FK → regions, nullable
+is_active	bool
+failed_login_count	int
+locked_until	timestamp
+last_login_at	timestamp
+
+refresh_tokens
+
+Field	Type / notes
+user_id	FK → users
+token_hash	sha256, unique; the raw token is never stored
+expires_at	timestamp
+revoked_at	timestamp, nullable
+created_at	timestamp
+
+policies
+
+Field	Type / notes
+policy_number	unique, indexed
+policy_type	enum: motor, health, property
+policyholder_name	varchar
+policyholder_email	varchar, nullable
+policyholder_phone	varchar, nullable
+coverage_amount	numeric(14,2)
+premium_amount	numeric(12,2)
+deductible_amount	numeric(12,2)
+region_id	FK → regions
+start_date	date
+end_date	date
+status	enum: active, expired, cancelled, suspended
+
+claims
+
+Field	Type / notes
+claim_number	unique, indexed
+policy_id	FK → policies (BR-002)
+region_id	FK → regions
+claim_type	enum
+status	enum: submitted, under_review, approved, rejected, closed
+claimant_name	indexed, for search
+claimant_email	varchar, nullable
+claimant_phone	varchar, nullable
+claimant_national_id_enc	encrypted text, never logged (BR-008)
+incident_date	date
+description	text
+claimed_amount	numeric(14,2), CHECK > 0
+approved_amount	numeric(14,2), nullable
+is_high_value	bool
+assigned_adjuster_id	FK → users, nullable
+created_by	FK → users
+submitted_at	timestamp
+sla_due_at	timestamp
+decided_at	timestamp, nullable
+closed_at	timestamp, nullable
+fraud_score	int
+fraud_flags	JSON (rule-based indicators)
+
+claim_notes
+
+Field	Type / notes
+claim_id	FK → claims
+author_id	FK → users
+note_type	enum: adjuster_note, manager_note, system
+content	text
+created_at	timestamp
+
+claim_status_history (append-only)
+
+Field	Type / notes
+claim_id	FK → claims
+from_status	enum, null on creation
+to_status	enum
+changed_by	FK → users
+is_override	bool
+justification	text, required when is_override is true
+changed_at	timestamp
+
+sla_configs
+
+Field	Type / notes
+claim_type	enum, unique
+sla_days	int
+updated_by	FK → users
+updated_at	timestamp
+
+documents
+
+Field	Type / notes
+title	varchar
+original_filename	varchar
+storage_path	varchar
+file_hash	sha256, unique, blocks duplicate uploads
+mime_type	varchar
+size_bytes	int
+doc_type	enum: policy_wording, endorsement, guideline
+applies_to	enum policy type, nullable
+version	varchar
+status	enum: processing, active, inactive, failed
+is_active	bool, indexed (FR-016, BR-006)
+chunk_count	int
+error_message	text, nullable
+uploaded_by	FK → users
+deactivated_by	FK → users, nullable
+deactivated_at	timestamp, nullable
+
+document_chunks
+
+Field	Type / notes
+document_id	FK → documents
+chunk_index	int, unique with document_id
+content	text
+section_heading	varchar, used for citations
+page_number	int, nullable
+token_count	int
+vector_id	id in Chroma/FAISS
+is_active	bool, mirrors the document, so retrieval can filter on it
+created_at	timestamp
+
+chat_query_logs
+
+Field	Type / notes
+user_id	FK → users
+question	text, PII-scrubbed
+answer	text
+source_chunk_ids	JSON, the cited document/section references
+similarity_scores	JSON
+top_k	int
+confidence_score	float
+is_no_match	bool
+flagged_for_review	bool, indexed
+model_name	varchar
+prompt_tokens	int
+completion_tokens	int
+total_tokens	int
+latency_ms	int
+status	varchar: success or error
+error_type	varchar
+created_at	timestamp
+
+audit_logs (append-only, hash-chained)
+
+Field	Type / notes
+id	bigserial PK
+actor_id	FK → users, nullable
+actor_role	varchar
+action	varchar, e.g. CLAIM_STATUS_CHANGED, LOGIN_FAILED, DOC_DEACTIVATED
+entity_type	varchar
+entity_id	varchar
+old_value	JSON
+new_value	JSON
+ip_address	varchar
+request_id	varchar
+created_at	timestamp
+prev_hash	varchar
+row_hash	sha256 of prev_hash plus the row payload, which makes the log tamper-evident
+
+Relationships:
+
+regions 1—N users, policies and claims.
+policies 1—N claims.
+claims 1—N claim_notes and claim_status_history.
+users 1—N claims (through assigned_adjuster_id).
+documents 1—N document_chunks.
+users 1—N chat_query_logs and audit_logs.
+2. Folder structure
+claimiq/
+├── src/app/
+│   ├── main.py                  # app factory, CORS, routers, exception handlers
+│   ├── core/                    # config.py, security.py (JWT/bcrypt), exceptions.py, logging.py (redacts secrets)
+│   ├── db/                      # base.py (Base + mixins), session.py (engine, get_db)
+│   ├── models/                  # enums, user, policy, claim, document, audit  (SQLAlchemy)
+│   ├── schemas/                 # Pydantic request/response models: auth, user, claim, ...
+│   ├── api/
+│   │   ├── deps.py              # get_current_user, require_roles(...)  ← RBAC
+│   │   └── v1/
+│   │       ├── router.py
+│   │       └── endpoints/       # health, auth, users, policies, claims, documents, ai, analytics
+│   ├── services/                # business logic: claim_workflow.py, audit_service.py
+│   ├── rag/                     # (yours) chunker, embedder, retriever, prompt builder, pipeline
+│   ├── analytics/               # (yours) Pandas: cleaning, KPIs, report builders
+│   └── utils/
+├── tests/  unit/  integration/  conftest.py
+├── migrations/                  # Alembic
+├── scripts/                     # init_db.py (working); add generate_mock_data.py, ingest_docs.py
+├── data/  documents/  mock/
+├── docs/                        # architecture diagram, DB ERD, API notes
+├── .github/workflows/ci.yml     # ruff, black, mypy, pytest, docker build
+├── Dockerfile  docker-compose.yml  pyproject.toml  .env.example  .gitignore  README.md
+
+Requests flow in one direction: endpoint → service → model. Endpoints stay thin, and rules like the status workflow live in services/, where they're easy to unit test.
+
+3. What the boilerplate implements
+Validation:
+Pydantic v2 schemas use regex, ranges, enums and custom validators. Examples are no future incident date, a positive amount, and a password strength check.
+A global handler turns validation failures into 422 responses with a field-level errors list (AC-008).
+Unauthorized returns a generic 401, forbidden returns 403, and a missing record returns 404. Unhandled errors return a generic 500 and are logged internally.
+Auth:
+Login and refresh use JWT access and refresh tokens. Refresh tokens are single-use and stored only as hashes.
+Five failed logins locks the account for 15 minutes, and the login error message is the same for every failure.
+RBAC: require_roles(...) is a dependency you put on every endpoint. Analytics is limited to Manager and Admin (AC-006), and user management to Admin (BR-001).
+Claims:
+Create checks the policy is active and matches the claim type, then sets the SLA due date.
+The list endpoint searches by policy number, claimant or status, with pagination. Adjuster region scoping is done in the SQL query, not in Python.
+The status update enforces the workflow. A manager can override with a justification, and high-value approvals are manager-only. Each change writes a history row, an optional note and an audit entry.
+Audit: hash-chained log entries for logins, user creation and claim changes.
+Placeholders: policies, documents, ai and analytics are stubs with the role protection already wired. ai/query already returns the response shape: answer, citations and no_match.
+DevOps: the Compose file runs API, Postgres 16 and Chroma, and there's a CI workflow. Tests cover the workflow rules, a 422 response and the 401 check.
