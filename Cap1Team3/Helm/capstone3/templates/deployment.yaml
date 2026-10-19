@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "capstone3.fullname" . }}
+  labels:
+    app: {{ include "capstone3.name" . }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "capstone3.name" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "capstone3.name" . }}
+    spec:
+      containers:
+        - name: capstone3
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.containerPort }}
+              protocol: TCP
+          env:
+            - name: DATABASE_URL
+              value: {{ .Values.env.DATABASE_URL | quote }}
+            - name: AZURE_OPENAI_ENDPOINT
+              value: {{ .Values.env.AZURE_OPENAI_ENDPOINT | quote }}
+            - name: OPENAI_API_VERSION
+              value: {{ .Values.env.OPENAI_API_VERSION | quote }}

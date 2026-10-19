@@ -1,0 +1,58 @@
+stages:
+  - build
+  - deploy
+
+variables:
+  IMAGE_NAME: "$DOCKERHUB_IMAGE:$CI_COMMIT_SHORT_SHA"
+  DOCKER_HOST: tcp://docker:2375
+  DOCKER_TLS_CERTDIR: ""
+
+build-image:
+  stage: build
+  image: docker:27
+  services:
+    - name: docker:27-dind
+      alias: docker
+
+  before_script:
+    - printf '%s' "$DOCKERHUB_PASSWORD" |
+      docker login
+      --username "$DOCKERHUB_USERNAME"
+      --password-stdin
+
+  script:
+    - docker build -t "$IMAGE_NAME" .
+    - docker push "$IMAGE_NAME"
+
+    - |
+      if [ "$CI_COMMIT_BRANCH" = "$CI_DEFAULT_BRANCH" ]; then
+        docker tag "$IMAGE_NAME" "$DOCKERHUB_IMAGE:latest"
+        docker push "$DOCKERHUB_IMAGE:latest"
+      fi
+
+deploy-to-server:
+  stage: deploy
+  image: alpine:latest
+
+  before_script:
+    - apk add --no-cache openssh-client
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+
+    - printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/kubernetes.pem
+    - chmod 600 ~/.ssh/kubernetes.pem
+
+    # ssh-keyscan requires only the hostname
+    - ssh-keyscan -T 15 -H ec2-54-206-85-197.ap-southeast-2.compute.amazonaws.com > ~/.ssh/known_hosts
+    - chmod 644 ~/.ssh/known_hosts
+  script:
+    - |
+      ssh \
+        -i ~/.ssh/kubernetes.pem \
+        -o ConnectTimeout=15 \
+        -o StrictHostKeyChecking=yes \
+        ubuntu@ec2-54-206-85-197.ap-southeast-2.compute.amazonaws.com \
+        "hostname && whoami"
+
+  after_script:
+    - rm -f ~/.ssh/kubernetes.pem
