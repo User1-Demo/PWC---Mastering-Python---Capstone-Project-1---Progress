@@ -1,0 +1,1 @@
+Section 1: Claim Workflow. Claims move from submitted to under review and then closed.

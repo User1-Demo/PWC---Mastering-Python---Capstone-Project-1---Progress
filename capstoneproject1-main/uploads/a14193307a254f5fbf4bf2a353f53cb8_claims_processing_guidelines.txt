@@ -1,0 +1,37 @@
+Title: Claims Processing Guidelines
+
+Section 1: Claim Workflow
+Standard workflow is Claim Submitted, Validation, Assigned to Adjuster, Under Review, Decision as Approved or Rejected, and finally Closed after completion of processing steps.
+
+Section 2: Validation Checks
+At submission stage, mandatory fields must be checked including policy linkage, claimant details, claim type, region, amount, incident date, and description. Claims missing required data must not proceed until corrected.
+
+Section 3: Policy Validation
+Every claim must be linked to a valid policy. Claims against inactive, cancelled, expired, or otherwise invalid policies must be rejected or returned for clarification according to business rules.
+
+Section 4: Type Matching
+Claim type must align with the related policy type. For example, a motor claim must be linked to a motor policy and a health claim must be linked to a health policy.
+
+Section 5: Status Progression
+Claims should move forward only through defined states: Submitted, Under Review, Approved or Rejected, and Closed. Direct backward or skipped transitions are not allowed without manager override and recorded justification.
+
+Section 6: Manager Override
+A Claims Manager may override a status transition where justified by business urgency, exceptional circumstances, or corrected operational error. Every override must include a written reason and must be audit logged.
+
+Section 7: Adjuster Responsibilities
+Adjusters review assigned claims, verify documents, add notes, assess admissibility, and recommend approval or rejection in line with policy wording and internal guidelines.
+
+Section 8: Support Agent Responsibilities
+Support agents may check claim status and use approved knowledge sources for customer guidance. Support agents must not approve, reject, or directly alter claim status beyond allowed permissions.
+
+Section 9: Approval Guidance
+Approval should be considered only when policy coverage is valid, mandatory documents are reasonably available, facts are consistent, exclusions do not apply, and loss appears admissible.
+
+Section 10: Rejection Guidance
+Claims may be rejected for inactive policy, claim outside coverage period, excluded event, insufficient documentation after due follow-up, fraudulent indicators, or policy condition breach.
+
+Section 11: Audit Logging
+Claim creation, status change, note addition, document upload, AI query activity, and user management actions must be recorded in audit logs with user and timestamp.
+
+Section 12: Data Protection
+Sensitive personal identifiers must not be exposed in logs or operational notes unless explicitly required and protected according to internal security standards.
